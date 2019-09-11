@@ -32,8 +32,20 @@ class AccountBankStatementImport(models.TransientModel):
             # Matches the first 24 characters of a CODA file, as defined by
             # the febelfin specifications
             return re.match(rb'0{5}\d{9}05[ D] {7}', data_file) is not None
-        except:
+        except Exception:
             return False
+
+    def _get_acc_number(self, acc_number):
+        # fix for Triodos Bank coda file
+        # Check if we match the exact acc_number or the end of an acc number
+        # in order to return the iban number when the coda
+        journal = self.env['account.journal'].search([
+                            ('bank_acc_number', '=like', '%' + acc_number)])
+        # if not found or ambiguious
+        if not journal or len(journal) > 1:
+            return acc_number
+
+        return journal.bank_acc_number
 
     @api.model
     def _parse_file(self, data_file):
@@ -49,14 +61,14 @@ class AccountBankStatementImport(models.TransientModel):
             _logger.exception('Error when parsing coda file')
             raise UserError(
                 _("The following problem occurred during import. "
-                  "The file might not be valid.\n\n %s" % e.message))
+                  "The file might not be valid.\n\n %s" % e))
 
         acc_number = None
         currency = None
         if statements:
             acc_number = statements[0].acc_number
             currency = statement.currency
-        return currency, acc_number, vals_bank_statements
+        return currency, self._get_acc_number(acc_number), vals_bank_statements
 
     def get_st_vals(self, statement):
         """
@@ -112,6 +124,10 @@ class AccountBankStatementImport(models.TransientModel):
                                          globalisation_dict,
                                          information_dict)
             info['sequence'] = sequence
+            info['unique_import_id'] = statement.coda_seq_number + '-' \
+                + statement.old_balance_date + '-' \
+                + statement.new_balance_date + '-' \
+                + info['unique_import_id']
             transactions.append(info)
         return vals
 
@@ -180,7 +196,8 @@ class AccountBankStatementImport(models.TransientModel):
             'partner_name': line.counterparty_name or None,
             'account_number': line.counterparty_number or None,
             'note': self.get_st_line_note(line, information_dict),
-            'unique_import_id': line.ref + line.transaction_ref,
+            'unique_import_id': line.ref + '-' + line.transaction_ref + '-'
+            + line.transaction_date,
         }
 
     @api.model
