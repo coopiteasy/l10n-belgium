@@ -48,6 +48,7 @@ Credits
 Authors
 ~~~~~~~
 
+* Odoo SA
 * ACSONE SA/NV
 
 Contributors
