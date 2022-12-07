@@ -128,7 +128,10 @@ class ResPartner(models.Model):
         if kbn and vat:
             if kbn.replace(".", "") != self._fix_vat_number(vat, country_id)[2:]:
                 raise ValidationError(
-                    _("KBO/BCE Number '%s' is not consistent with " "VAT Number '%s'.")
+                    _(
+                        "KBO/BCE Number '%(kbn)s' is not consistent with "
+                        "VAT Number '%(vat)s'."
+                    )
                     % (kbn, vat)
                 )
 
