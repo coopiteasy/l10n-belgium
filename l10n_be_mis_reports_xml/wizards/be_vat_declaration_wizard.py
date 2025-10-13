@@ -8,6 +8,8 @@ import re
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
+from odoo.addons.mis_builder.models.kpimatrix import KpiMatrix
+
 
 class BeVATDeclarationWizard(models.TransientModel):
     _name = "be.vat.declaration.wizard"
@@ -77,17 +79,22 @@ class BeVATDeclarationWizard(models.TransientModel):
 
     def prepare_xml_data(self):
         self.ensure_one()
+        # extract data for kpis whose name start with "grid" and having a
+        # non-null value.
+        grid_kpis = self.env["mis.report.kpi"].search([("name", "like", "grid%")])
+        grid_kpis_by_id = {kpi.id: kpi for kpi in grid_kpis}
         kpi_matrix_dict = self.mr_instance_id.compute()
-        data = {
-            row["row_id"]: row["cells"][0]["val"] for row in kpi_matrix_dict["body"]
-        }
-
-        data = {
-            k: "{:.2f}".format(round(v, 2))
-            for k, v in data.items()
-            if k.startswith("grid") and v
-        }
-        return data
+        xml_data = {}
+        for row in kpi_matrix_dict["body"]:
+            cell = row["cells"][0]
+            value = cell["val"]
+            if not value:
+                continue
+            kpi_id = KpiMatrix._unpack_cell_id(cell["cell_id"])[0]
+            grid_kpi = grid_kpis_by_id.get(kpi_id)
+            if grid_kpi is not None:
+                xml_data[grid_kpi.name] = "{:.2f}".format(round(value, 2))
+        return xml_data
 
     def compute_declarant_reference(self):
         return self.env["ir.sequence"].next_by_code("be.vat.declaration.declarant")
